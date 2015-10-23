@@ -7,8 +7,8 @@ https://bugs.launchpad.net/neutron/+bug/1472704
 This document describes and proposes a kind of Neutron 'network' whose
 key connectivity semantic is that it only guarantees to provide IP
 connectivity between the VMs that are attached to that network.  This
-is interesting, we believe, because very many data center workloads
-only *need* connectivity at IP and above, and because it allows us to
+is interesting, we believe, because the vast majority of data center workloads
+only need connectivity at IP and above, and because it allows us to
 experiment with implementations of that connectivity that are perhaps
 simpler and more scalable than implementations that provide L2
 connectivity.
@@ -108,7 +108,7 @@ Uniform security policy
 For a VM on a Neutron non-external network, effective security policy
 is a composite of the security groups that are defined on that VM's
 port(s), and of whether and how the network is connected to other
-networks through Neutron virtual routers.  Calico's view is that, for
+networks through Neutron virtual routers.  Calico's aproach is that, for
 deployments where the focus is on very large numbers of IP-based
 endpoints, it is simpler and more uniform to define security entirely
 in terms of the roles that each endpoint has, and which other IP
@@ -125,12 +125,12 @@ Shared or overlapping IPs
 
 Calico is best suited for deployments that do not require private
 address spaces - e.g. to allow multiple tenants to use overlapping IP
-ranges.  Support for overlapping IPs fundamentally requires stateful
+ranges.  Support for overlapping IPs generally requires stateful
 NAT or some kind of encapsulation or overlay, and so conflicts with
 Calico's desire for simple data paths.  Calico will support
 overlapping IPs where needed (by translating private address space
 IPv4 packets statelessly into IPv6, transporting them across the core
-as IPv6, and then translating back to IPv4 on the destination compute
+as IPv6, and then statelessly translating back to IPv4 on the destination compute
 host), but it primarily targets use cases where overlapping IPs are
 not needed, or only used for a small fraction of data center traffic.
 
@@ -140,7 +140,8 @@ Required Neutron semantics
 Therefore Calico requires the following Neutron semantics, beyond
 those that are already well-established.
 
-- A kind of network that supports multiple IPv4 and/or IPv6 subnets,
+- A kind of network that supports one or more IPv4 and/or IPv6 address
+  ranges,
   and only provides L3 connectivity between the VMs that are attached
   to it; and also between those VMs and the outside world.
 
@@ -237,7 +238,8 @@ L2 segments at a useful scale - too, and a better approach is to look
 at using pluggable IPAM.
 
 With Calico, even though each compute host is a router, it is still
-desirable to allocate IP addresses such that the IP addresses on VMs
+desirable (but not a hard requirement) to allocate IP addresses such
+that the IP addresses on VMs 
 in a given rack/pod fall with a specific IP prefix for that rack/pod.
 This is so that VM routes can be aggregated on each ToR router, and on
 any fabric routers between the ToR routers.  Hence the practical
@@ -265,8 +267,9 @@ the other L3 connectivity and addressing aspects above.
 Proposed Change
 ===============
 
-A new L3Network object is added to the Neutron API and data model.  It
-can have multiple IPv4 and/or IPv6 subnets.  VMs can be attached to an
+A new L3Network object is added to the Neutron API and data model that
+is constructed of one or more IPv4 and/or IPv6 prefixes.
+VMs can be attached to an
 L3Network as an alternative to being attached to a Neutron network.
 
 This spec does not yet specify every detail of L3Network's properties
@@ -390,9 +393,9 @@ addressing patterns that Calico wants to use.
 
 Depending on which turns out to be more natural and convenient, Calico
 can either use a single L3Network object with multiple IPv4 and IPv6
-subnets, or multiple L3Network objects each with one IPv4 and IPv6
-subnet.  IP reachability is the same either way, but with a single
-L3Network object the user also needs to specify which subnet each VM
+prefixes, or multiple L3Network objects each with one IPv4 and IPv6
+prefix.  IP reachability is the same either way, but with a single
+L3Network object the user also needs to specify which prefix each VM
 should get its IP address from, when launching VMs.  :code:`neutron
 port-create ...` supports this, so this is possible on the command
 line using :code:`neutron port-create ...` followed by :code:`nova
@@ -409,7 +412,9 @@ partitioned into different L3Network objects.
 Note that with this uniform reachability, it is still easy for a
 particular tenant to get effective isolation, if desired, for its own
 group of VMs.  The tenant just needs to create its own security group,
-and use that security group when launching its own instances.
+and use that security group when launching its own instances.  In
+fact, this may be the *default* behavior, as configured by the
+operator of the fabric via *default* security policies.
 
 Calico's planned use of floating IPs (where IP mobility is needed) is
 not supported by the current Neutron API - because current floating
